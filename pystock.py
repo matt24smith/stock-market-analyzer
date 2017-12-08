@@ -49,11 +49,11 @@ def epoch3(t):
     return int(t)
 
 
-def cluster(revenues_assets, netincome_assets, minClustSize, minSamples):
+def cluster(revenues_assets, netincome_assets, deltaRA, deltaNIA, minClustSize, minSamples):
     """
     Returns a clustering on revenue/time and netincome/time data
     """
-    x = zip(revenues_assets, netincome_assets)
+    x = zip(revenues_assets, netincome_assets, deltaRA, deltaNIA)
     clusterer = (hdbscan.HDBSCAN(algorithm='prims_kdtree',
                  min_cluster_size=minClustSize,
                  min_samples=minSamples,
@@ -200,7 +200,7 @@ for symbol in stocks.keys():
             try:
                 t = epoch3(report['end_date'])
                 revOverAsset        = (float(report['revenues'])   / float(report['assets']))
-                netincomeOverAsset  = (float(report['net_income']) / float(report['assets']))
+                netincomeOverAsset  = (float(report['net_income']) * float(report['assets']))
             except ValueError:
                 continue
 
@@ -228,9 +228,17 @@ for symbol in stocks.keys():
         del stocks[symbol]
         continue
 
+
+    stocks[symbol]['avgRA'] = (sum(stocks[symbol]['revenues_assets']) /
+                               len(stocks[symbol]['revenues_assets']))
+    
+    stocks[symbol]['avgNIA'] = (sum(stocks[symbol]['netincome_assets']) /
+                                len(stocks[symbol]['netincome_assets']))
+
+
     # average rate of change in the value of revenues over assets --> deltaRA
     stocks[symbol]['deltaRA'] = [
-            (ra[i + 1] - ra[i]) * 100000 /
+            (ra[i + 1] - ra[i]) * 100000. /
             ((ti[i+1] - ti[i]) / 60. / 60. / 24.)
             for i in xrange(len(ra) - 1)]
 
@@ -239,7 +247,7 @@ for symbol in stocks.keys():
 
     #average rate of change in value of netincome over assets --? deltaNIA
     stocks[symbol]['deltaNIA'] = [
-            (nia[i + 1] - nia[i]) * 1000000000000 /
+            (nia[i + 1] - nia[i]) / 100000. /
             ((ti[i+1] - ti[i]) / 60. / 60. / 24.)
             for i in xrange(len(nia) - 1)]
 
@@ -249,19 +257,24 @@ for symbol in stocks.keys():
 
 # time to cluster!
 sortedKeys = np.array(sorted(stocks.keys()))
+avgRAs = [stocks[key]['avgRA'] for key in sortedKeys]
+avgNIAs = [stocks[key]['avgNIA'] for key in sortedKeys]
 avgDeltaRAs = [stocks[key]['avgDeltaRA'] for key in sortedKeys]
 avgDeltaNIAs = [stocks[key]['avgDeltaNIA'] for key in sortedKeys]
 
-clusterer = cluster(avgDeltaRAs, avgDeltaNIAs, minClustSize=5, minSamples=2)
+clusterer = cluster(avgRAs, avgNIAs, avgDeltaRAs, avgDeltaNIAs, minClustSize=5, minSamples=2)
 
 
 # show some results for Apple Inc
-ix = np.where(sortedKeys == 'AAPL')[0][0]
+ix = np.where(sortedKeys == 'CSX')[0][0]
 clusterLabel = clusterer.labels_[ix]
 matchinglabels = np.where(clusterer.labels_ == clusterLabel)[0]
 
 results = sortedKeys[matchinglabels]
 
 for result in results:
-    print result, "\t", symbolsdict[result]
+    print (result + "\t" + symbolsdict[result] + 
+           "\n\tRA: %.2f    NIA: %.2f    deltaRA: %.2f    deltaNIA: %.2f\n" 
+           % (stocks[result]['avgRA'], stocks[result]['avgNIA'], 
+              stocks[result]['avgDeltaRA'], stocks[result]['avgDeltaNIA']))
 

@@ -231,7 +231,7 @@ for symbol in stocks.keys():
 
     stocks[symbol]['avgRA'] = (sum(stocks[symbol]['revenues_assets']) /
                                len(stocks[symbol]['revenues_assets']))
-    
+
     stocks[symbol]['avgNIA'] = (sum(stocks[symbol]['netincome_assets']) /
                                 len(stocks[symbol]['netincome_assets']))
 
@@ -245,7 +245,7 @@ for symbol in stocks.keys():
     stocks[symbol]['avgDeltaRA'] = (sum(stocks[symbol]['deltaRA']) /
                                     len(stocks[symbol]['deltaRA']))
 
-    #average rate of change in value of netincome over assets --? deltaNIA
+    #average rate of change in value of netincome over assets --> deltaNIA
     stocks[symbol]['deltaNIA'] = [
             (nia[i + 1] - nia[i]) / 100000. /
             ((ti[i+1] - ti[i]) / 60. / 60. / 24.)
@@ -265,7 +265,7 @@ avgDeltaNIAs = [stocks[key]['avgDeltaNIA'] for key in sortedKeys]
 clusterer = cluster(avgRAs, avgNIAs, avgDeltaRAs, avgDeltaNIAs, minClustSize=5, minSamples=2)
 
 
-# show some results for Apple Inc
+# show some results
 ix = np.where(sortedKeys == 'CSX')[0][0]
 clusterLabel = clusterer.labels_[ix]
 matchinglabels = np.where(clusterer.labels_ == clusterLabel)[0]
@@ -273,8 +273,11 @@ matchinglabels = np.where(clusterer.labels_ == clusterLabel)[0]
 results = sortedKeys[matchinglabels]
 
 for result in results:
-    print (result + "\t" + symbolsdict[result] + 
-           "\n\tRA: %.2f    NIA: %.2f    deltaRA: %.2f    deltaNIA: %.2f\n" 
-           % (stocks[result]['avgRA'], stocks[result]['avgNIA'], 
+    print (result + "\t" + symbolsdict[result] +
+           ("\n\t\tAverage revenue / assets:\t\t%.2f" +
+            "\n\t\tAverage net income / assets:\t\t%.2f " +
+            "\n\t\tAverage delta revenue / assets:\t\t%.2f" +
+            "\n\t\tAverage delta net income / assets:\t%.2f\n")
+           % (stocks[result]['avgRA'], stocks[result]['avgNIA'],
               stocks[result]['avgDeltaRA'], stocks[result]['avgDeltaNIA']))
 

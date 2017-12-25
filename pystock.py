@@ -24,7 +24,25 @@ Some stats on the dataset:
 
 """
 
-datapath = r"D:\matt-workspace\python_sandbox\stocks\data\pystock-data-gh-pages"
+"""
+                    Clustering measure of similarity
+
+https://www.cs.princeton.edu/sites/default/files/uploads/karina_marvin.pdf
+(Notably, sec. 4.1)
+
+A measure of similarity should be selected to cluster similar candidates
+together. From the reasoning provided in the paper referred above, the
+following parameters should be chosen as clusterable measures.
+
+Ratio of revenues to assets
+Ratio of net income to assets
+(perhaps a weighted average of the two?)
+
+
+"""
+
+
+datapath = r"/host/Users/mokho_000/Bash/python/stock-market-analyzer/data/pystock-data-gh-pages"
 
 
 import os
@@ -35,6 +53,7 @@ import hdbscan
 import datetime
 
 epochT2 = datetime.datetime.fromtimestamp(0)
+
 
 def memory(): return psutil.virtual_memory().percent
 
@@ -64,113 +83,61 @@ def cluster(revenues_assets, netincome_assets, deltaRA, deltaNIA, minClustSize, 
     return clusterer
 
 
+def read_dataset(datafiles):
+
+    stocks = {'symbols': {},
+              'prices' : {},
+              'reports': {}}
+
+    for ix, datapath in enumerate(datafiles):
+
+        print("Processing %d/%d\t%s" % (ix, len(datafiles), datapath.split("/")[-1]))
+
+        if memory() > 75:
+            print("\nRunning out of memory! Data parsing has been halted.")
+            break
+
+        d = gzip.GzipFile(datapath)
+
+        for line in d:
+            if ".txt" in line or ".csv" in line:
+                datatype = line.split('\x00')#.split(".")
+                datatype = filter(None, datatype)[0].split('.')[0]
+                continue
+            if datatype == 'symbols':
+                l = line.rstrip().split('\t')
+            else:
+                l = line.rstrip().split(',')
+
+            if '\x00' in l: continue
+
+            try:
+                stocks[datatype][l[0]]
+            except KeyError:
+                if datatype == "symbols":
+                    stocks[datatype][l[0]] = l[1]
+                else:
+                    stocks[datatype][l[0]] = np.array([])
+            if datatype == 'symbols':
+                pass
+            elif datatype == 'prices':
+                stocks[datatype][l[0]] = np.append(stocks[datatype][l[0]], l[1:])
+            elif datatype == 'reports':
+                stocks[datatype][l[0]] = np.append(stocks[datatype][l[0]], l[1:])
+
+    return stocks
+
+
 datafiles = [os.path.join(root, name)
              for root, dirs, files in os.walk(datapath)
              for name in files
              if name.endswith(".tar.gz")]
 
-count = 0
 
-symbolsdict = {}
-stocks = {}
-
-# feed me moar data
-for data in datafiles[3:]:
-    if memory() > 75:
-        print "\nRunning out of memory! Data parsing has been halted."
-        break
-
-    print "processing file %s" % data
-    with gzip.open(data, 'rb') as f:
-        for line in f:
-            if '\x00' in line: continue
-            if ".txt" in line or "\t" in line:
-                symbol = True
-                price  = False
-                report = False
-            elif "," in line and not ",Q" in line and not ",F" in line:
-                symbol = False
-                price  = True
-                report = False
-            elif ",Q" in line or ",F" in line:
-                symbol = False
-                price  = False
-                report = True
-
-            if symbol:
-                splitline = line.split("\t")
-                symbolsdict[splitline[0]] = splitline[1].rstrip()
-
-            if price:
-                splitline = line.split(",")
-                symbol = splitline[0]
-                try:
-                    stocks[symbol]
-                except KeyError:
-                    stocks[symbol] = {}
-                try:
-                    stocks[symbol]['prices']
-                except KeyError:
-                    stocks[symbol]['prices'] = np.array([])
-                pricedatum = {}
-                pricedatum['date'] = splitline[1]
-                pricedatum['open'] = splitline[2]
-                pricedatum['high'] = splitline[3]
-                pricedatum['low'] = splitline[4]
-                pricedatum['close'] = splitline[5]
-                pricedatum['volume'] = splitline[6]
-                pricedatum['adj_close'] = splitline[7].rstrip()
-                stocks[symbol]['prices'] = np.append(stocks[symbol]['prices'], pricedatum)
-
-            if report:
-                splitline = line.split(",")
-                symbol = splitline[0]
-                try:
-                    stocks[symbol]
-                except KeyError:
-                    stocks[symbol] = {}
-                try:
-                    stocks[symbol]['reports']
-                except KeyError:
-                    stocks[symbol]['reports'] = np.array([])
-                reportdatum = {}
-                reportdatum['end_date']     = splitline[1]
-#                reportdatum['amend']        = splitline[2]
-#                reportdatum['period']       = splitline[3]
-#                reportdatum['period_focus'] = splitline[4]
-#                reportdatum['fiscal_year']  = splitline[5]
-#                reportdatum['doc_type']     = splitline[6]
-                reportdatum['revenues']     = splitline[7]
-#                reportdatum['op_income']    = splitline[8]    # operating income
-                reportdatum['net_income']   = splitline[9]   # net income
-#                reportdatum['eps_basic']    = splitline[10]  # basic earnings per share
-#                reportdatum['eps_diluted']  = splitline[11]  # diluted earnings per share
-#                reportdatum['dividend']     = splitline[12]
-                reportdatum['assets']       = splitline[13]
-#                reportdatum['cur_assets']
-#                reportdatum['cur_liab']
-#                reportdatum['cash']
-
-                stocks[symbol]['reports'] = np.append(stocks[symbol]['reports'], reportdatum)
-
-            count += 1
-
-"""
-                    Clustering measure of similarity
-
-https://www.cs.princeton.edu/sites/default/files/uploads/karina_marvin.pdf
-(Notably, sec. 4.1)
-
-A measure of similarity should be selected to cluster similar candidates
-together. From the reasoning provided in the paper referred above, the
-following parameters should be chosen as clusterable measures.
-
-Ratio of revenues to assets
-Ratio of net income to assets
-(perhaps a weighted average of the two?)
+datafiles = datafiles[3:]  # temporary fix
+stocks = read_dataset(datafiles)
 
 
-"""
 
 # trim the fat
 for symbol in stocks.keys():
@@ -194,6 +161,8 @@ for symbol in stocks.keys():
     times = np.array([])
     revenues_assets = np.array([])
     netincome_assets = np.array([])
+
+for symbol in stocks.keys():
 
     if 'reports' in stocks[symbol].keys():
         for report in stocks[symbol]['reports']:
